@@ -44,6 +44,7 @@ If none of these works (isolated network, VLANs…), put the PC's IP address in 
 - A 6-axis Mahony filter estimates the orientation. Gyro bias is calibrated at startup and refined whenever the console is at rest. With no magnetometer, the heading drifts slowly. 6-axis SlimeVR trackers behave the same way, and SlimeVR's resets handle it.
 - It speaks SlimeVR's native UDP protocol on port 6969: handshake, sensor info, rotation (packet 17), heartbeat, ping, battery and Wi-Fi signal.
 - Sensors and networking run on their own thread, separate from the UI. When the lid is closed (or after SELECT), the UI stops drawing and the backlight turns off.
+- Tracking pauses while the HOME Menu is open: the app gives the network back to the system and reconnects to the server when you return.
 - To keep Wi-Fi up with the lid closed, the app takes NDM's "infrastructure" exclusive state, locks it, and suspends the StreetPass/SpotPass daemons. If the connection drops anyway, it asks the system to reconnect every 10 s.
 
 ## Building

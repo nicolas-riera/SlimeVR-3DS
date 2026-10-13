@@ -14,6 +14,8 @@ static LightLock s_lock;
 static TrackerState s_state;
 static Fusion s_fusion;
 static bool s_sensorsOk;
+static volatile bool s_suspended, s_paused;
+static aptHookCookie s_hook;
 
 /* Sensors, filter and network all run here, independently of the UI, so the
    tracker keeps working with the lid closed and the screens off. */
@@ -23,6 +25,14 @@ static void worker(void* arg) {
 	int decim = 0;
 
 	while (s_running) {
+		/* Idle while the HOME Menu (or an applet) has the system. */
+		if (s_suspended) {
+			s_paused = true;
+			svcSleepThread(50 * 1000000LL);
+			continue;
+		}
+		s_paused = false;
+
 		u64 now = osGetTime();
 		int n = s_sensorsOk ? sensors_read_gyro(samples, 32) : 0;
 		vec3 acc = s_sensorsOk ? sensors_read_accel() : v3(0, 0, 0);
@@ -57,20 +67,33 @@ static void worker(void* arg) {
 	}
 }
 
-void tracker_start(bool haveMcuHwc) {
+static void on_apt(APT_HookType hook, void* param) {
+	(void)param;
+	if (hook == APTHOOK_ONSUSPEND) {
+		s_suspended = true;
+		/* make sure the worker is idle before the system takes over */
+		for (int i = 0; i < 200 && s_thread && !s_paused; i++) svcSleepThread(1000000LL);
+	} else if (hook == APTHOOK_ONRESTORE) {
+		s_suspended = false;
+	}
+}
+
+void tracker_start(void) {
 	LightLock_Init(&s_lock);
 	memset(&s_state, 0, sizeof(s_state));
 	fusion_init(&s_fusion);
 	s_sensorsOk = sensors_init();
-	net_init(haveMcuHwc);
+	net_init();
 
 	s32 prio = 0x30;
 	svcGetThreadPriority(&prio, CUR_THREAD_HANDLE);
 	s_running = true;
 	s_thread = threadCreate(worker, NULL, 64 * 1024, prio > 0x19 ? prio - 1 : prio, -2, false);
+	aptHook(&s_hook, on_apt, NULL);
 }
 
 void tracker_stop(void) {
+	aptUnhook(&s_hook);
 	s_running = false;
 	if (s_thread) {
 		threadJoin(s_thread, U64_MAX);

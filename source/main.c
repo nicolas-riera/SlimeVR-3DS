@@ -9,12 +9,26 @@
 #define SOC_BUFFER_SIZE 0x100000
 
 static bool s_backlightOn = true;
+static bool s_userScreensOff;
+static aptHookCookie s_aptHook;
 
 static void set_backlight(bool on) {
 	if (on == s_backlightOn) return;
+	/* gsp::Lcd is shared with the system: only open it when needed */
+	if (R_FAILED(gspLcdInit())) return;
 	s_backlightOn = on;
 	if (on) GSPLCD_PowerOnBacklight(GSPLCD_SCREEN_BOTH);
 	else GSPLCD_PowerOffBacklight(GSPLCD_SCREEN_BOTH);
+	gspLcdExit();
+}
+
+/* Leaving for the HOME Menu with the screens off would look like a freeze. */
+static void on_apt(APT_HookType hook, void* param) {
+	(void)param;
+	if (hook == APTHOOK_ONSUSPEND) {
+		s_userScreensOff = false;
+		set_backlight(true);
+	}
 }
 
 int main(void) {
@@ -27,8 +41,6 @@ int main(void) {
 	cfguInit();
 	lang_init();
 	ptmuInit();
-	gspLcdInit();
-	bool haveMcuHwc = R_SUCCEEDED(mcuHwcInit());
 
 	u32* socBuffer = (u32*)memalign(0x1000, SOC_BUFFER_SIZE);
 	bool socOk = socBuffer && R_SUCCEEDED(socInit(socBuffer, SOC_BUFFER_SIZE));
@@ -36,9 +48,9 @@ int main(void) {
 
 	/* keep the Wi-Fi up with the lid closed (no StreetPass takeover) */
 	wifilock_begin();
-	tracker_start(haveMcuHwc);
+	tracker_start();
+	aptHook(&s_aptHook, on_apt, NULL);
 
-	bool userScreensOff = false;
 	u8 shellOpen = 1;
 	u64 lastShellCheck = 0;
 	TrackerState st;
@@ -48,8 +60,8 @@ int main(void) {
 		u32 down = hidKeysDown();
 		if (down & KEY_START) break;
 
-		if (userScreensOff && down) userScreensOff = false;
-		else if (down & KEY_SELECT) userScreensOff = true;
+		if (s_userScreensOff && down) s_userScreensOff = false;
+		else if (down & KEY_SELECT) s_userScreensOff = true;
 		if (down & KEY_A) ui_request_recenter();
 
 		u64 now = osGetTime();
@@ -58,7 +70,7 @@ int main(void) {
 			if (R_FAILED(PTMU_GetShellState(&shellOpen))) shellOpen = 1;
 		}
 
-		bool screensOn = shellOpen && !userScreensOff;
+		bool screensOn = shellOpen && !s_userScreensOff;
 		set_backlight(screensOn);
 
 		if (screensOn) {
@@ -70,6 +82,7 @@ int main(void) {
 		}
 	}
 
+	aptUnhook(&s_aptHook);
 	tracker_stop();
 	wifilock_end();
 	set_backlight(true);
@@ -77,8 +90,6 @@ int main(void) {
 
 	socExit();
 	free(socBuffer);
-	if (haveMcuHwc) mcuHwcExit();
-	gspLcdExit();
 	ptmuExit();
 	cfguExit();
 	acExit();

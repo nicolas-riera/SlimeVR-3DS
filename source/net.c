@@ -54,7 +54,6 @@ enum {
 static const char HANDSHAKE_REPLY[] = "Hey OVR =D 5";
 
 static NetStatus s_st;
-static bool s_mcuHwc;
 static int s_sock = -1;
 static u64 s_packetNumber = 1;
 static struct sockaddr_in s_server;
@@ -226,8 +225,15 @@ static void start_search(u64 now) {
 }
 
 static void read_battery(void) {
+	/* mcu::HWC has few sessions and the HOME Menu needs one: only hold it
+	   for the duration of the read. */
 	u8 v = 0;
-	if (s_mcuHwc && R_SUCCEEDED(MCUHWC_GetBatteryLevel(&v)) && v <= 100) s_st.battery = v;
+	bool precise = false;
+	if (R_SUCCEEDED(mcuHwcInit())) {
+		precise = R_SUCCEEDED(MCUHWC_GetBatteryLevel(&v)) && v <= 100;
+		mcuHwcExit();
+	}
+	if (precise) s_st.battery = v;
 	else if (R_SUCCEEDED(PTMU_GetBatteryLevel(&v))) s_st.battery = v * 20;
 	else s_st.battery = -1;
 	u8 c = 0;
@@ -420,9 +426,8 @@ static void tick_connected(u64 now, bool sendRotation, quat q) {
 
 /* ---------------------------------------------------------------- api */
 
-void net_init(bool haveMcuHwc) {
+void net_init(void) {
 	memset(&s_st, 0, sizeof(s_st));
-	s_mcuHwc = haveMcuHwc;
 	s_st.state = NET_NO_WIFI;
 	s_st.battery = -1;
 	make_mac();

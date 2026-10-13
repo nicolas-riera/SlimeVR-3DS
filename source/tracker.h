@@ -42,6 +42,6 @@ typedef struct {
 	NetStatus net;
 } TrackerState;
 
-void tracker_start(bool haveMcuHwc);
+void tracker_start(void);
 void tracker_stop(void);
 void tracker_snapshot(TrackerState* out);
