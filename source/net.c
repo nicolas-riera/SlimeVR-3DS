@@ -15,7 +15,10 @@
 #define CONFIG_DIR       "sdmc:/3ds/SlimeVR-3DS"
 #define SERVER_FILE      CONFIG_DIR "/server.txt"
 
-#define FIRMWARE_NAME    "3DS-SlimeVR 1.0.0"
+#ifndef APP_VERSION
+#define APP_VERSION      "dev"
+#endif
+#define FIRMWARE_NAME    "3DS-SlimeVR " APP_VERSION
 #define PROTOCOL_VERSION 21
 #define BOARD_CUSTOM     4
 #define IMU_UNKNOWN      0
