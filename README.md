@@ -1,6 +1,5 @@
 # SlimeVR 3DS
 
-> [!WARNING]
 > **This project was made entirely by an AI** (Claude, by Anthropic): the code, assets, build setup and documentation. It has only been partly tested on real hardware. Use it at your own risk.
 
 A homebrew app that turns any Nintendo 3DS family console (3DS, 3DS XL, 2DS, New 3DS, New 3DS XL, New 2DS XL) into a Wi-Fi [SlimeVR](https://slimevr.dev/) tracker. It uses the console's gyroscope and accelerometer.
