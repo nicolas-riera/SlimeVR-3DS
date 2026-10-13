@@ -186,23 +186,47 @@ def make_banner():
 
 
 def make_jingle():
-    rate = 22050
-    notes = [(0.00, 0.18, 523.25, 698.46), (0.20, 0.45, 783.99, 1046.5)]  # boing-ish slides
-    total = 1.0
-    data = bytearray()
-    for i in range(int(total * rate)):
+    """HOME Menu banner sound: a squishy slime "blop" followed by a sparkly
+    arpeggio. Stereo PCM16 at 32728 Hz (the 3DS DSP rate), under 3 seconds."""
+    rate = 32728
+    total = 1.9
+    n = int(total * rate)
+    left = [0.0] * n
+    right = [0.0] * n
+
+    # slime "blop": a bubble whose pitch jumps up then settles, with a wobble
+    phase = 0.0
+    for i in range(int(0.42 * rate)):
         t = i / rate
-        v = 0.0
-        for start, dur, f0, f1 in notes:
-            if start <= t < start + dur:
-                u = (t - start) / dur
-                f = f0 + (f1 - f0) * min(1.0, u * 3)
-                env = min(1.0, (t - start) * 200) * (1 - u) ** 2
-                ph = 2 * math.pi * f * (t - start)
-                v += env * (0.6 * math.sin(ph) + 0.25 * math.sin(2 * ph))
-        data += struct.pack("<h", int(max(-1, min(1, v * 0.7)) * 32767))
+        f = 170 + 420 * (1 - math.exp(-t * 28)) - 160 * max(0.0, t - 0.12) / 0.3
+        f *= 1 + 0.04 * math.sin(2 * math.pi * 18 * t)
+        phase += 2 * math.pi * f / rate
+        env = min(1.0, t * 300) * math.exp(-t * 7)
+        v = env * (0.75 * math.sin(phase) + 0.2 * math.sin(2 * phase))
+        left[i] += v
+        right[i] += v
+
+    # arpeggio C6 E6 G6 C7, bell-like, panned left to right
+    notes = [1046.5, 1318.5, 1568.0, 2093.0]
+    for k, f in enumerate(notes):
+        start = 0.36 + k * 0.11
+        pan = k / (len(notes) - 1)
+        for i in range(int(start * rate), n):
+            t = i / rate - start
+            env = min(1.0, t * 400) * math.exp(-t * (5.5 - k * 0.6))
+            v = env * (0.42 * math.sin(2 * math.pi * f * t) + 0.08 * math.sin(2 * math.pi * f * 2.76 * t))
+            left[i] += v * (1 - 0.6 * pan)
+            right[i] += v * (0.4 + 0.6 * pan)
+
+    peak = max(max(abs(x) for x in left), max(abs(x) for x in right))
+    gain = 0.85 / peak
+    fade = int(0.05 * rate)
+    data = bytearray()
+    for i in range(n):
+        g = gain * min(1.0, (n - i) / fade)
+        data += struct.pack("<hh", int(left[i] * g * 32767), int(right[i] * g * 32767))
     with wave.open(os.path.join(ROOT, "banner.wav"), "wb") as w:
-        w.setnchannels(1)
+        w.setnchannels(2)
         w.setsampwidth(2)
         w.setframerate(rate)
         w.writeframes(bytes(data))
