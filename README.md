@@ -64,3 +64,7 @@ Filter test on PC:
 ```sh
 gcc -O2 -Isource tests/fusion_test.c source/fusion.c -lm -o fusion_test && ./fusion_test
 ```
+
+## License
+
+[MIT](LICENSE)
